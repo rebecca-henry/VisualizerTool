@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scene Description Visualizer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a18; }
+  .top-bar { padding: 1rem 1.25rem 0.75rem; border-bottom: 0.5px solid #d3d1c7; background: #fff; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .top-bar h2 { font-size: 16px; font-weight: 500; }
+  .scene-badge { font-size: 12px; font-weight: 500; color: #0c447c; background: #dbeeff; border-radius: 6px; padding: 2px 8px; }
+  .file-name { font-size: 12px; color: #888780; }
+  .parse-error { font-size: 12px; color: #a32d2d; }
+  .reset-btn { padding: 3px 10px; font-size: 12px; border: 0.5px solid #b4b2a9; border-radius: 6px; background: transparent; color: #1a1a18; cursor: pointer; }
+  .reset-btn:hover { background: #eceae3; }
+  .img-tab-btn { padding: 3px 10px; font-size: 12px; border-radius: 6px; border: 0.5px solid #b4b2a9; background: transparent; color: #1a1a18; cursor: pointer; }
+  .img-tab-btn:hover { background: #eceae3; }
+  .img-tab-btn.active { background: #dbeeff; color: #0c447c; border-color: transparent; }
+  .preset-select { padding: 4px 10px; font-size: 12px; border: 0.5px solid #b4b2a9; border-radius: 6px; background: #fff; color: #1a1a18; cursor: pointer; max-width: 200px; }
+  .preset-select:focus { outline: none; border-color: #888780; }
+  .layout { display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 57px); overflow: hidden; }
+  .layout.img-open { grid-template-columns: 1fr 1fr 1fr; }
+  .left-panel { overflow-y: auto; border-right: 0.5px solid #d3d1c7; padding: 1rem; background: #f5f5f3; min-width: 0; }
+  .right-panel { overflow-y: auto; background: #fff; min-width: 0; padding: 1rem; }
+  .right-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 0.5px solid #d3d1c7; }
+  .right-title { font-size: 13px; font-weight: 500; }
+  .right-empty { color: #b4b2a9; font-size: 13px; padding: 2rem 0; text-align: center; }
+  .seam-field { margin-bottom: 0.85rem; }
+  .seam-field-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: #888780; margin-bottom: 3px; }
+  .seam-field-value { font-size: 13px; color: #1a1a18; line-height: 1.5; }
+  .seam-field-value.missing { color: #b4b2a9; font-style: italic; }
+  .seam-sub-label { font-size: 11px; font-weight: 500; color: #5f5e5a; text-transform: uppercase; letter-spacing: 0.04em; margin: 1rem 0 0.4rem; padding-bottom: 3px; border-bottom: 0.5px solid #d3d1c7; }
+  .seam-loc-block { background: #f5f5f3; border-radius: 8px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem; }
+  .seam-loc-title { font-size: 11px; font-weight: 500; color: #185fa5; margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .section { border: 0.5px solid #d3d1c7; border-radius: 10px; margin-bottom: 0.65rem; overflow: hidden; background: #fff; }
+  .section-header { padding: 0.6rem 0.85rem; background: #eceae3; display: flex; justify-content: space-between; align-items: center; user-select: none; cursor: pointer; }
+  .section-header:hover { background: #e2e0d9; }
+  .section-header.active { background: #dbeeff; }
+  .section-title { font-size: 13px; font-weight: 500; flex: 1; }
+  .section-arrow { font-size: 13px; color: #5f5e5a; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 0.5px solid #b4b2a9; background: #fff; flex-shrink: 0; cursor: pointer; }
+  .section-arrow:hover { background: #dbeeff; color: #0c447c; border-color: #85b7eb; }
+  .section-body { display: none; padding: 0.75rem; }
+  .section-body.open { display: block; }
+  .empty-state { padding: 3rem 1rem; text-align: center; color: #888780; font-size: 13px; }
+  .img-panel { display: none; flex-direction: column; overflow-y: auto; background: #fff; padding: 1rem; min-width: 0; border-right: 0.5px solid #d3d1c7; }
+  .img-panel.open { display: flex; }
+  .img-panel img { width: 100%; border-radius: 8px; margin-bottom: 0.75rem; }
+  .img-caption { font-size: 12px; color: #5f5e5a; line-height: 1.6; padding: 4px 0; border-bottom: 0.5px solid #d3d1c7; }
+  .img-caption:last-child { border-bottom: none; }
+  .img-error { font-size: 12px; color: #a32d2d; }
+  .img-address { font-size: 11px; color: #888780; margin-bottom: 0.5rem; }
+  .right-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 0.75rem; }
+  .right-tab { padding: 3px 10px; font-size: 11px; border-radius: 6px; border: 0.5px solid #b4b2a9; background: transparent; color: #5f5e5a; cursor: pointer; white-space: nowrap; }
+  .right-tab:hover { background: #f1efe8; }
+  .right-tab.active { background: #dbeeff; color: #0c447c; border-color: transparent; }
+  .gen-section { border-top: 0.5px solid #d3d1c7; margin-top: 0.75rem; padding-top: 0.75rem; }
+  .gen-title { font-size: 13px; font-weight: 500; margin-bottom: 0.5rem; }
+  .gen-key-row { display: flex; gap: 6px; align-items: center; margin-bottom: 0.5rem; }
+  .gen-key-input { flex: 1; padding: 4px 8px; font-size: 12px; border: 0.5px solid #b4b2a9; border-radius: 6px; background: #fff; color: #1a1a18; font-family: monospace; min-width: 0; }
+  .gen-key-input:focus { outline: none; border-color: #888780; }
+  .gen-btn { padding: 4px 12px; font-size: 12px; border-radius: 6px; background: #dbeeff; color: #0c447c; border: 0.5px solid #85b7eb; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .gen-btn:hover { background: #c5e0ff; }
+  .gen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .gen-status { font-size: 11px; color: #888780; margin-bottom: 0.4rem; min-height: 16px; }
+  .gen-error { font-size: 12px; color: #a32d2d; margin-top: 0.3rem; }
+  .gen-img-wrap { margin-top: 0.5rem; }
+  .gen-img-wrap img { width: 100%; border-radius: 8px; }
+  .gen-spinner { font-size: 13px; color: #888780; display: flex; align-items: center; gap: 6px; padding: 0.5rem 0; }
+  .gen-spin { display: inline-block; animation: spin 1s linear infinite; font-size: 16px; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #1e1e1c; color: #e8e6df; }
+    .top-bar { background: #252523; border-color: #444441; }
+    .left-panel { background: #1e1e1c; border-color: #444441; }
+    .right-panel { background: #252523; }
+    .right-header { border-color: #444441; }
+    .right-title { color: #e8e6df; }
+    .seam-field-value { color: #e8e6df; }
+    .seam-sub-label { color: #888780; border-color: #444441; }
+    .seam-loc-block { background: #2c2c2a; }
+    .seam-loc-title { color: #85b7eb; }
+    .section { background: #252523; border-color: #444441; }
+    .section-header { background: #2c2c2a; }
+    .section-header:hover { background: #333331; }
+    .section-header.active { background: #0c2d4a; }
+    .section-arrow { background: #1e1e1c; border-color: #444441; color: #b4b2a9; }
+    .section-arrow:hover { background: #0c2d4a; color: #85b7eb; border-color: #85b7eb; }
+    .scene-badge { background: #0c2d4a; color: #85b7eb; }
+    .reset-btn { border-color: #444441; color: #e8e6df; }
+    .preset-select { background: #1e1e1c; color: #e8e6df; border-color: #444441; }
+    .img-panel { background: #252523; border-color: #444441; }
+    .gen-key-input { background: #1e1e1c; color: #e8e6df; border-color: #444441; }
+    .section-body { border-color: #444441; }
+  }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <h2>Scene Description Visualizer</h2>
+  <span id="scene-badge-wrap"></span>
+  <select class="preset-select" id="preset-select" onchange="loadPreset(this.value)">
+    <option value="">— Load a preset Scene Description —</option>
+    <option value="data/1_2604.jsonl">1_2604</option>
+    <option value="data/1_3167.jsonl">1_3167</option>
+    <option value="data/2_1397.jsonl">2_1397</option>
+    <option value="data/2_3476.jsonl">2_3476</option>
+    <option value="data/3_387.jsonl">3_387</option>
+    <option value="data/5_3467.jsonl">5_3467</option>
+  </select>
+  <span class="file-name" id="file-name"></span>
+  <span class="parse-error" id="parse-error"></span>
+  <button class="reset-btn" onclick="resetAll()">Reset</button>
+  <button class="img-tab-btn active" id="img-tab-toggle" onclick="toggleImgPanel()">🖼 Images</button>
+</div>
+
+<div class="layout img-open" id="layout">
+  <div class="img-panel open" id="img-panel">
+    <div style="font-size:13px;font-weight:500;margin-bottom:0.75rem;">Reference photo</div>
+    <div class="img-error" id="img-error"></div>
+    <div id="img-content"><div class="right-empty">Load a Scene Description to see its reference image</div></div>
+    <div class="gen-section">
+      <div class="gen-title">AI generated image of Scene Description</div>
+      <div class="gen-key-row">
+        <input class="gen-key-input" type="password" id="openai-key" placeholder="OpenAI API key (sk-…)">
+        <select id="gen-quality" style="padding:4px 8px;font-size:12px;border:0.5px solid #b4b2a9;border-radius:6px;background:#fff;color:#1a1a18;cursor:pointer;flex-shrink:0;">
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="auto">Auto</option>
+        </select>
+        <button class="gen-btn" id="gen-btn" onclick="generateScene()">Generate</button>
+      </div>
+      <div class="gen-status" id="gen-status"></div>
+      <div id="openai-status" style="font-size:11px;color:#888780;margin-bottom:0.4rem;display:none;">
+        Waiting for OpenAI… <span id="openai-status-text">0s</span>
+      </div>
+      <div class="gen-error" id="gen-error"></div>
+      <div class="gen-img-wrap" id="gen-img-wrap"></div>
+    </div>
+  </div>
+
+  <div class="left-panel" id="left-panel"></div>
+
+  <div class="right-panel" style="display:flex;flex-direction:column;">
+    <div class="right-header">
+      <div style="display:flex;gap:4px;">
+        <button class="right-tab active" id="tab-scene-description-data" onclick="switchRightTab('scene-description-data')">Scene Description data</button>
+        <button class="right-tab" id="tab-scene-description-summary" onclick="switchRightTab('scene-description-summary')">Scene Description summary</button>
+      </div>
+    </div>
+    <div id="right-content" style="flex:1;overflow-y:auto;min-height:0;"><div class="right-empty">Click a section to view Scene Description data</div></div>
+    <div id="right-summary" style="flex:1;overflow-y:auto;min-height:0;display:none;padding:0.75rem 1rem;"></div>
+  </div>
+</div>
+
+<script>
+let seamDataMap = {};
+let uploadedFileName = '';
+let cocoLookup = null;
+let imgPanelOpen = true;
+let currentSeamData = null;
+let activeRightTab = 'scene-description-data';
+
+// Auto-load coco_lookup.json
+fetch('coco_lookup.json')
+  .then(r=>{ if(!r.ok) throw new Error(); return r.json(); })
+  .then(data=>{ cocoLookup=data; })
+  .catch(()=>{});
+
+function esc(s){ return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function loadPreset(path){
+  if(!path) return;
+  const fileNameEl=document.getElementById('file-name');
+  const parseErrorEl=document.getElementById('parse-error');
+  fileNameEl.textContent='Loading…';
+  parseErrorEl.textContent='';
+  fetch(path)
+    .then(r=>{ if(!r.ok) throw new Error('Could not load file ('+r.status+').'); return r.text(); })
+    .then(text=>{
+      const name=path.split('/').pop().replace(/\.jsonl?$/i,'');
+      uploadedFileName=name;
+      fileNameEl.textContent=name;
+      text=text.trim();
+      let data=null;
+      try{ data=JSON.parse(text); }catch(e1){}
+      if(!data){ try{ data=JSON.parse('{'+text); }catch(e2){} }
+      if(!data){ for(const line of text.split('\n')){ try{ data=JSON.parse(line.trim()); break; }catch(e){} } }
+      if(!data) throw new Error('Could not parse file.');
+      currentSeamData=data.scene_description||data;
+      buildUI(currentSeamData);
+      if(activeRightTab==='scene-description-summary') renderSummary();
+      tryLoadImage();
+    })
+    .catch(err=>{
+      fileNameEl.textContent='';
+      parseErrorEl.textContent=err.message;
+      document.getElementById('preset-select').value='';
+    });
+}
+
+function resetAll(){
+  currentSeamData=null;
+  uploadedFileName='';
+  seamDataMap={};
+  document.getElementById('left-panel').innerHTML='';
+  document.getElementById('right-content').innerHTML='<div class="right-empty">Click a section to view Scene Description data</div>';
+  document.getElementById('right-summary').innerHTML='';
+  document.getElementById('img-content').innerHTML='<div class="right-empty">Load a Scene Description to see its reference image</div>';
+  document.getElementById('img-error').textContent='';
+  document.getElementById('scene-badge-wrap').innerHTML='';
+  document.getElementById('file-name').textContent='';
+  document.getElementById('parse-error').textContent='';
+  document.getElementById('preset-select').value='';
+  document.getElementById('gen-img-wrap').innerHTML='';
+  document.getElementById('gen-status').textContent='';
+  document.getElementById('gen-error').textContent='';
+}
+
+function switchRightTab(tab){
+  activeRightTab=tab;
+  document.getElementById('tab-scene-description-data').classList.toggle('active',tab==='scene-description-data');
+  document.getElementById('tab-scene-description-summary').classList.toggle('active',tab==='scene-description-summary');
+  document.getElementById('right-content').style.display=tab==='scene-description-data'?'':'none';
+  const sumEl=document.getElementById('right-summary');
+  sumEl.style.display=tab==='scene-description-summary'?'':'none';
+  if(tab==='scene-description-summary') renderSummary();
+}
+
+function renderSummary(){
+  const el=document.getElementById('right-summary');
+  if(!currentSeamData){ el.innerHTML='<div class="right-empty">Load a Scene Description to see summary</div>'; return; }
+  const sd=currentSeamData;
+  const g=sd.geometry||{};
+  const rf=sd.reference_frame||{};
+  let h='';
+  h+=`<div class="seam-field"><div class="seam-field-label">Name</div><div class="seam-field-value">${esc(sd.name||'—')}</div></div>`;
+  h+=`<div class="seam-field"><div class="seam-field-label">Geometry alignment</div><div class="seam-field-value">${esc(rf.geometry_alignment_desc||'—')}</div></div>`;
+  const boundaries=sd.boundaries||[];
+  if(boundaries.length){
+    h+=`<div class="seam-sub-label">Boundaries</div>`;
+    boundaries.forEach(b=>{ h+=`<div class="seam-loc-block"><div class="seam-loc-title">${esc(b.name||'—')}</div><div class="seam-field-value" style="font-size:12px;">${esc(b.location_desc||'—')}</div></div>`; });
+  }
+  const segments=sd.segments||[];
+  if(segments.length){
+    h+=`<div class="seam-sub-label">Segments</div>`;
+    segments.forEach(s=>{ h+=`<div class="seam-loc-block"><div class="seam-loc-title">${esc(s.name||'—')}</div><div class="seam-field-value" style="font-size:12px;">${esc(s.location_desc||'—')}</div></div>`; });
+  }
+  const objects=sd.objects||[];
+  if(objects.length){
+    h+=`<div class="seam-sub-label">Objects</div>`;
+    objects.forEach(o=>{ h+=`<div class="seam-loc-block"><div class="seam-loc-title">${esc(o.name||'—')}</div><div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:#888780;margin-bottom:2px;">Orientation</div><div class="seam-field-value" style="font-size:12px;margin-bottom:6px;">${esc(o.orientation_desc||'—')}</div><div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:#888780;margin-bottom:2px;">Location</div><div class="seam-field-value" style="font-size:12px;">${esc(o.location_desc||'—')}</div></div>`; });
+  }
+  const surroundings=sd.surroundings||[];
+  if(surroundings.length){
+    h+=`<div class="seam-sub-label">Surroundings</div>`;
+    h+=`<div class="seam-loc-block"><div class="seam-field-value" style="font-size:12px;">${surroundings.map(s=>esc(s.name||'—')).join(', ')}</div></div>`;
+  }
+  el.innerHTML=h;
+}
+
+function field(label,value){
+  const v=value!=null&&value!==''?`<div class="seam-field-value">${esc(String(value))}</div>`:`<div class="seam-field-value missing">—</div>`;
+  return `<div class="seam-field"><div class="seam-field-label">${label}</div>${v}</div>`;
+}
+function sizeHtml(s){ if(!s) return field('Size','—'); return field('Size',`${s.height}${s.height_unit||''} H × ${s.width}${s.width_unit||''} W × ${s.depth}${s.depth_unit||''} D`); }
+function locHtml(l,i,total){
+  if(!l) return '';
+  const dval=l.distance_value!=null?`${l.distance_value} ${l.distance_unit||''}`.trim():'—';
+  return `<div class="seam-loc-block">
+    <div class="seam-loc-title">Location ${i+1} of ${total}</div>
+    ${field('Relation',l.relation_desc)}
+    ${field('Reference element',l.reference_element)}
+    ${field('Target element',l.target_element)}
+    ${field('Ref centre point',l.reference_centre_point)}
+    ${field('Target centre point',l.target_centre_point)}
+    ${field('Distance',dval)}
+    ${field('Horizontal dir',l.horizontal_direction_value!=null?l.horizontal_direction_value+'°':null)}
+    ${field('Vertical dir',l.vertical_direction_value!=null?l.vertical_direction_value+'°':null)}
+  </div>`;
+}
+
+function buildSeamMap(sd){
+  seamDataMap={};
+  const g=sd.geometry||{};
+  seamDataMap['geometry']={title:'Geometry',html:field('Type',g.type)+field('Shape',g.shape)+sizeHtml(g.size)};
+  const rf=sd.reference_frame||{};
+  let rfH=field('Geometry alignment',rf.geometry_alignment_desc)+field('Reference elements',(rf.reference_elements||[]).join(', '))+field('Location desc',rf.location_desc);
+  (rf.location||[]).forEach((l,i)=>rfH+=locHtml(l,i,(rf.location||[]).length));
+  seamDataMap['refframe']={title:'Reference frame',html:rfH};
+  function itemHtml(item){
+    const locs=item.location||[];
+    let h=field('Name',item.name)+(item.shape?field('Shape',item.shape):'')+field('Landmark',item.landmark!=null?String(item.landmark):null)+field('Surrounding type',item.surrounding_type||null)+field('Orientation desc',item.orientation_desc||null)+(item.orientation_value!=null?field('Orientation value',`${item.orientation_value} ${item.orientation_unit||''}`):'')+sizeHtml(item.size)+field('Reference elements',(item.reference_elements||[]).join(', '))+field('Location desc',item.location_desc);
+    locs.forEach((l,i)=>h+=locHtml(l,i,locs.length));
+    return h;
+  }
+  [['boundaries','Boundaries'],['segments','Segments'],['objects','Objects']].forEach(([key,label])=>{
+    const items=sd[key]||[];
+    if(!items.length){ seamDataMap[key]={title:label,html:`<div class="right-empty">No ${label.toLowerCase()} in this SEAM</div>`,tabs:null}; return; }
+    const singular=label.replace(/ies$/,'y').replace(/s$/,'');
+    let allHtml=''; items.forEach((item,i)=>{ allHtml+=`<div class="seam-sub-label">${singular} ${i+1}: ${item.name}</div>`+itemHtml(item); });
+    const tabs=[{label:'All',html:allHtml}];
+    items.forEach((item,i)=>{ tabs.push({label:`${i+1}: ${item.name}`,html:itemHtml(item)}); });
+    seamDataMap[key]={title:label,html:allHtml,tabs};
+  });
+  const surs=sd.surroundings||[];
+  let surH=''; surs.forEach((item,i)=>{ surH+=`<div class="seam-sub-label">Surrounding ${i+1}: ${item.name}</div>`+field('Name',item.name)+field('Geometric desc',item.geometric_desc)+field('Surrounding type',item.surrounding_type); });
+  seamDataMap['surroundings']={title:'Surroundings',html:surH||'<div class="right-empty">No surroundings in this SEAM</div>'};
+  seamDataMap['overall']={title:'Overall SEAM',html:
+    field('Name',sd.name)+
+    field('Type',g.type)+field('Shape',g.shape)+sizeHtml(g.size)+
+    field('Boundaries',(sd.boundaries||[]).map(b=>b.name).join(', '))+
+    field('Segments',(sd.segments||[]).map(s=>s.name).join(', '))+
+    field('Objects',(sd.objects||[]).map(o=>o.name).join(', '))+
+    field('Surroundings',(sd.surroundings||[]).map(s=>s.name).join(', '))
+  };
+}
+
+function showSeamData(key){
+  if(!key) return;
+  const entry=seamDataMap[key]; if(!entry) return;
+  document.querySelectorAll('.section-header').forEach(h=>h.classList.remove('active'));
+  const hdr=document.getElementById('hdr-'+key);
+  if(hdr) hdr.classList.add('active');
+  renderRightPanel(key,0);
+}
+
+function renderRightPanel(key,tabIdx){
+  const entry=seamDataMap[key]; if(!entry) return;
+  const rc=document.getElementById('right-content');
+  if(!entry.tabs){
+    rc.innerHTML=entry.html;
+    return;
+  }
+  const tabs=entry.tabs;
+  const tabBar=tabs.map((t,i)=>`<button class="right-tab${i===tabIdx?' active':''}" onclick="renderRightPanel('${key}',${i})">${t.label}</button>`).join('');
+  rc.innerHTML=`<div class="right-tabs">${tabBar}</div><div>${tabs[tabIdx].html}</div>`;
+}
+
+function makeSection(title, key, open){
+  const isOpen=open!==false;
+  return `<div class="section">
+    <div class="section-header${isOpen?' active':''}" id="hdr-${key}" onclick="handleHeaderClick(event,'${key}')">
+      <span class="section-title">${title}</span>
+      <span class="section-arrow" onclick="event.stopPropagation();toggleSec(document.getElementById('hdr-${key}'),'${key}')">${isOpen?'▾':'▸'}</span>
+    </div>
+    <div class="section-body${isOpen?' open':''}" id="body-${key}"></div>
+  </div>`;
+}
+
+function toggleSec(el, key){
+  const body=document.getElementById('body-'+key);
+  const arr=el.querySelector('.section-arrow');
+  const wasOpen=body.classList.contains('open');
+  body.classList.toggle('open',!wasOpen);
+  if(arr) arr.textContent=wasOpen?'▸':'▾';
+}
+
+function handleHeaderClick(event, key){
+  if(event.target.classList.contains('section-arrow')) return;
+  document.querySelectorAll('.section-header').forEach(h=>h.classList.remove('active'));
+  document.getElementById('hdr-'+key).classList.add('active');
+  showSeamData(key);
+}
+
+function buildUI(sd){
+  buildSeamMap(sd);
+  document.getElementById('scene-badge-wrap').innerHTML=sd.name?`<span class="scene-badge">${sd.name}</span>`:'';
+  let html='';
+  html+=makeSection('Geometry','geometry',true);
+  html+=makeSection('Reference frame','refframe',false);
+  html+=makeSection('Boundaries','boundaries',false);
+  html+=makeSection('Segments','segments',false);
+  html+=makeSection('Objects','objects',false);
+  html+=makeSection('Surroundings','surroundings',false);
+  html+=makeSection('Overall Scene Description','overall',false);
+  document.getElementById('left-panel').innerHTML=html;
+  // Populate section bodies from seamDataMap
+  ['geometry','refframe','boundaries','segments','objects','surroundings','overall'].forEach(key=>{
+    const body=document.getElementById('body-'+key);
+    if(body && seamDataMap[key]) body.innerHTML=seamDataMap[key].html;
+  });
+  showSeamData('geometry');
+}
+
+function toggleImgPanel(){
+  imgPanelOpen=!imgPanelOpen;
+  document.getElementById('img-panel').classList.toggle('open',imgPanelOpen);
+  document.getElementById('img-tab-toggle').classList.toggle('active',imgPanelOpen);
+  document.getElementById('layout').classList.toggle('img-open',imgPanelOpen);
+}
+
+function tryLoadImage(){
+  if(!cocoLookup||!uploadedFileName) return;
+  const match=uploadedFileName.match(/^(\d+)_(\d+)$/);
+  if(!match){ document.getElementById('img-error').textContent=''; return; }
+  const batch=parseInt(match[1]);
+  const index=parseInt(match[2]);
+  const address=(batch-1)*3500+index;
+  document.getElementById('img-error').textContent='';
+  const entry=cocoLookup[String(address)];
+  if(!entry){
+    document.getElementById('img-error').textContent='Image not found in lookup.';
+    document.getElementById('img-content').innerHTML='';
+    return;
+  }
+  const caps=entry.captions.map(c=>`<div class="img-caption">• ${esc(c)}</div>`).join('');
+  document.getElementById('img-content').innerHTML=`
+    <img src="${entry.coco_url}" alt="${entry.file_name}" onerror="this.style.display='none';document.getElementById('img-error').textContent='Could not load image.'">
+    <div style="font-size:11px;color:#888780;margin-bottom:0.5rem;">${entry.file_name}</div>
+    <div style="font-size:12px;font-weight:500;color:#5f5e5a;margin-bottom:0.35rem;text-transform:uppercase;letter-spacing:0.04em;">Captions</div>
+    ${caps}`;
+}
+
+// ── AI Image Generation ───────────────────────────────────────────────────────
+function setGenStatus(msg){ document.getElementById('gen-status').textContent=msg; }
+function setGenError(msg){ document.getElementById('gen-error').textContent=msg; }
+
+let _statusTimer=null;
+function fetchOpenAIStatus(){
+  const statusEl=document.getElementById('openai-status');
+  const textEl=document.getElementById('openai-status-text');
+  statusEl.style.display='';
+  let secs=0; textEl.textContent='0s';
+  _statusTimer=setInterval(()=>{ secs++; textEl.textContent=secs+'s'; },1000);
+}
+function hideOpenAIStatus(){
+  clearInterval(_statusTimer);
+  document.getElementById('openai-status').style.display='none';
+}
+
+async function generateScene(){
+  const apiKey=document.getElementById('openai-key').value.trim().replace(/[^\x20-\x7E]/g,'');
+  if(!apiKey){ setGenError('Please enter your OpenAI API key.'); return; }
+  if(!currentSeamData){ setGenError('Please load a Scene Description first.'); return; }
+  const btn=document.getElementById('gen-btn');
+  btn.disabled=true; setGenError(''); setGenStatus('');
+  document.getElementById('gen-img-wrap').innerHTML='<div class="gen-spinner"><span class="gen-spin">⟳</span> Loading…</div>';
+  fetchOpenAIStatus();
+  await new Promise(r=>setTimeout(r,50));
+  try {
+    const instructions=`You will be given a Spatial Episodic Artificial Memory (SEAM) which was generated using a Psychologically Realistic Spatial Language (PRSL). The PRSL formalizes elements of human spatial representations, as described below. SEAMs are psychologically realistic descriptions of 3D scenes which follow a specific template. Task: Render an exact image of the SEAM. Here is important information about the SEAM structure to help decode it.
+
+SIZE, DISTANCE, AND DIRECTION VALUES
+Height describes how tall an element is (how vertically long it is).
+Width describes how far an element stretches across horizontally.
+Depth describes the thickness of an element, how far it extends backward.
+All sizes, distances, and angles are perceived estimates that reflect how a human naturally remembers a scene, not precise measurements.
+Sizes must be plausible with consistent relative scale.
+------------------------------------------------------------
+ORIENTATION_DESC AND ORIENTATION_VALUE
+orientation_desc = natural language description of the elements orientation in comparison to the viewer.
+orientation_value = difference in horizontal direction of elements forward-facing direction relative to viewers forward. 0=same as viewer, 90=facing right, 180=facing backward, 270=facing left.
+------------------------------------------------------------
+GEOMETRY
+The geometry defines the environment. Type describes the scene (indoor, outdoor, beach, kitchen, forest, bedroom etc). Shape is a 3D shape name. Its size must encompass the entire scene.
+------------------------------------------------------------
+REFERENCE FRAME
+Defines where the viewer is and which way they face. Viewer is at (0,0,0) facing 0 degrees (forward).
+------------------------------------------------------------
+BOUNDARIES
+A boundary is an extended 3D surface with a height of at least 2 cm. Examples: wall, ledge, curb.
+------------------------------------------------------------
+SEGMENTS
+A segment is a spatially significant subsection of the scene.
+------------------------------------------------------------
+OBJECTS
+Physical items present in the scene.
+------------------------------------------------------------
+SURROUNDINGS
+A vast, enveloping feature above or below the scene. Examples: sky, ocean, sand.
+
+BE SURE TO PUT THINGS EXACTLY WHERE THEY ARE DESCRIBED TO BE IN THE SEAM.`;
+    const prompt=JSON.stringify({instructions,SEAM:currentSeamData});
+    const imgReqBody=JSON.stringify({model:'chatgpt-image-latest',prompt,size:'1024x1024',quality:document.getElementById('gen-quality').value,n:1});
+    const imgResponseText=await new Promise((resolve,reject)=>{
+      const xhr=new XMLHttpRequest();
+      xhr.open('POST','https://api.openai.com/v1/images/generations');
+      xhr.setRequestHeader('Content-Type','application/json');
+      xhr.setRequestHeader('Authorization','Bearer '+apiKey);
+      xhr.timeout=180000;
+      xhr.ontimeout=()=>reject(new Error('Request timed out after 3 minutes.'));
+      xhr.onerror=()=>reject(new Error('Network error — check your API key and connection.'));
+      xhr.onload=()=>{
+        if(xhr.status>=200&&xhr.status<300){ resolve(xhr.responseText); }
+        else { let msg='Image API error '+xhr.status; try{ const e=JSON.parse(xhr.responseText); msg+=': '+(e.error?.message||xhr.responseText.slice(0,200)); }catch(e){} reject(new Error(msg)); }
+      };
+      xhr.send(imgReqBody);
+    });
+    const data=JSON.parse(imgResponseText);
+    const b64=data.data?.[0]?.b64_json;
+    const url=data.data?.[0]?.url;
+    if(b64){ document.getElementById('gen-img-wrap').innerHTML=`<img src="data:image/png;base64,${b64}" alt="AI generated scene">`; }
+    else if(url){ document.getElementById('gen-img-wrap').innerHTML=`<img src="${url}" alt="AI generated scene">`; }
+    else { throw new Error('No image data returned.'); }
+    setGenStatus('Done!'); hideOpenAIStatus();
+  } catch(err) {
+    document.getElementById('gen-img-wrap').innerHTML='';
+    setGenError(err.message); setGenStatus(''); hideOpenAIStatus();
+  }
+  btn.disabled=false;
+}
+</script>
+</body>
+</html>
