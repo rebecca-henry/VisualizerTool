@@ -420,21 +420,22 @@ function tryLoadImage(){
     return;
   }
   const match=uploadedFileName.match(/^(\d+)_(\d+)$/);
-  if(!match){ document.getElementById('img-error').textContent='Debug: filename "'+uploadedFileName+'" did not match expected format batch_index'; return; }
+  if(!match){ document.getElementById('img-error').textContent=''; return; }
   const batch=parseInt(match[1]);
   const index=parseInt(match[2]);
   const address=(batch-1)*3500+index;
   document.getElementById('img-error').textContent='';
   const entry=cocoLookup[String(address)];
   if(!entry){
-    document.getElementById('img-error').textContent='Debug: address '+address+' not found in lookup (lookup has '+Object.keys(cocoLookup).length+' entries).';
+    document.getElementById('img-error').textContent='Image not found in lookup.';
     document.getElementById('img-content').innerHTML='';
     return;
   }
-  document.getElementById('img-error').textContent='Debug: found entry, loading URL: '+entry.coco_url;
+  const proxyUrl='https://images.weserv.nl/?url='+encodeURIComponent(entry.coco_url);
+  document.getElementById('img-error').textContent='';
   const caps=entry.captions.map(c=>`<div class="img-caption">• ${esc(c)}</div>`).join('');
   document.getElementById('img-content').innerHTML=`
-    <img src="${entry.coco_url}" alt="${entry.file_name}" onerror="document.getElementById('img-error').textContent='Image URL failed: ${entry.coco_url}'">
+    <img src="${proxyUrl}" alt="${entry.file_name}" onerror="document.getElementById('img-error').textContent='Could not load image.'">
     <div style="font-size:11px;color:#888780;margin-bottom:0.5rem;">${entry.file_name}</div>
     <div style="font-size:12px;font-weight:500;color:#5f5e5a;margin-bottom:0.35rem;text-transform:uppercase;letter-spacing:0.04em;">Captions</div>
     ${caps}`;
